@@ -1,4 +1,5 @@
 import requests
+import matplotlib.pyplot as plt
 from datetime import datetime
 
 #API Key for Alpha Vantage Query
@@ -9,7 +10,8 @@ def fetch_stock_data(symbol, time_series_function):
     params = {
         'function': time_series_function,
         'symbol': symbol,
-        'apikey': api_key
+        'apikey': api_key,
+        'outputsize': 'full'
     }
 
     response = requests.get(url, params=params)
@@ -20,6 +22,29 @@ def fetch_stock_data(symbol, time_series_function):
     else:
         print("error fetching data")
         return None
+
+#Parse JSON data to get the dates and closing prices
+def parse_time_series(data, time_series_fucntion, start_date, end_date):
+    time_series_key = list(data.keys())[1] # REtrieve the key for the time series data
+    time_series_data = data[time_series_key]
+
+    dates = []
+    closing_prices = []
+
+    start = datetime.strptime(start_date, '%Y-%m-%d')
+    end = datetime.strptime(end_date, '%Y-%m-%d')
+
+    for date, value in time_series_data.items():
+        current_date = datetime.strptime(date, '%Y-%m-%d')
+
+        if start <= current_date <= end:
+            dates.append(current_date)
+            closing_prices.append(float(value["4. close"]))
+
+    # Manually sorting the data by date for redundency
+    dates, closing_prices = zip(*sorted(zip(dates, closing_prices)))
+
+    return dates, closing_prices
 
 #Validating user date input
 def validate_dates(start_date, end_date):
@@ -35,6 +60,21 @@ def validate_dates(start_date, end_date):
         print("Error: Invalid date format. Please use YYYY-MM-DD.")
         return False
     
+def generate_chart(dates, closing_prices, symbol):
+    plt.figure(figsize=(10,5))
+    plt.plot(dates, closing_prices, label='Closing Price', marker='o')
+    plt.title(f"Stock Prices for {symbol}")
+    plt.xlabel("Date")
+    plt.ylabel("Price (USD)")
+    plt.legend()
+    plt.grid(True)
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+
+    # Saves the chart as an image file and displays it
+    plt.savefig("stock_chart.png")
+    plt.show()
+
 def main():
 #Taking user input for stock symbol   
     symbol = input("Enter the stock symbol: ").upper() 
@@ -76,7 +116,8 @@ def main():
     stock_data = fetch_stock_data(symbol, time_series_funciton)
 
     if stock_data:
-        print(stock_data)
+        dates, closing_prices = parse_time_series(stock_data, time_series_funciton, start_date, end_date)
+        generate_chart(dates, closing_prices, symbol)
 
 if __name__ == "__main__":
     main()
