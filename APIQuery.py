@@ -5,7 +5,7 @@ from datetime import datetime
 #API Key for Alpha Vantage Query
 api_key = "A5XGJKIF1F4259FR"
 
-def fetch_stock_data(symbol, time_series_function):
+def fetch_stock_data(symbol, time_series_function, interval=None, outputsize='compact', adjusted=True, extended_hours=True, month=None):
     url = f"https://www.alphavantage.co/query"
     params = {
         'function': time_series_function,
@@ -13,6 +13,18 @@ def fetch_stock_data(symbol, time_series_function):
         'apikey': api_key,
         'outputsize': 'full'
     }
+
+    # These are the additional parameters for intraday (from the Alpha Vantage website)
+    if time_series_function == "TIME_SERIES_INTRADAY":
+        if interval is None:
+            print("Error: Interval must be specified for intraday data (1 min, 5 min, 15min, 30min, or 60min).")
+            return None
+        params['interval'] = interval
+        params['outputsize'] = outputsize
+        params['adjusted'] = 'true' if adjusted else 'false'
+        params['extended_hours'] = 'true' if extended_hours else 'false'
+        if month:
+               params['month'] = month
 
     response = requests.get(url, params=params)
 
@@ -24,22 +36,52 @@ def fetch_stock_data(symbol, time_series_function):
         return None
 
 #Parse JSON data to get the dates and closing prices
-def parse_time_series(data, time_series_fucntion, start_date, end_date):
-    time_series_key = list(data.keys())[1] # REtrieve the key for the time series data
+def parse_time_series(data, time_series_function, start_date, end_date, interval=None):
+    # Check for the different time series function keys
+    if time_series_function == "TIME_SERIES_INTRADAY":
+        if interval is None:
+            print("Error: Interval must be specified for intraday data.")
+            return [], []
+        time_series_key = f"Time Series ({interval})" #Dynamically set based on interval
+    elif time_series_function == "Time_SERIES_DAILY":
+        time_series_key = "Time Series (Daily)"
+    elif time_series_function == "TIME_SERIES_WEEKLY":
+        time_series_key = "Weekly Time Series"
+    elif time_series_function == "TIME_SERIES_MONTHLY":
+        time_series_key = "Monthly Time Series"
+    else:
+        print("Unknown Time series function")
+        return [], []
+    
+    # Reponse for if key doesn't exist
+    if time_series_key not in data:
+        print(f"Error: Could not retrieve expected data from the API for {interval}. Check your input and try again.")
+        return [], []
+
     time_series_data = data[time_series_key]
 
     dates = []
     closing_prices = []
 
-    start = datetime.strptime(start_date, '%Y-%m-%d')
-    end = datetime.strptime(end_date, '%Y-%m-%d')
+    #Converts user input dates to datetime objects
+    start = datetime.strptime(start_date, '%Y-%m-%d').date()
+    end = datetime.strptime(end_date, '%Y-%m-%d').date()
 
     for date, value in time_series_data.items():
-        current_date = datetime.strptime(date, '%Y-%m-%d')
+        if time_series_function == "TIME_SERIES_INTRADAY":
+            current_date = datetime.strptime(date, '%Y-%m-%d %H:%M:%S').date() #Parse as date only
+        else:
+            current_date = datetime.strptime(date, '%Y-%m-%d').date()
 
+        # Only add data within the user-specified date range
         if start <= current_date <= end:
-            dates.append(current_date)
+            dates.append(datetime.strptime(date, '%Y-%m-%d %H:%M:%S') if time_series_function == "TIME_SERIES_INTRADAY" else datetime.strptime(date, '%Y-%m-%d'))
             closing_prices.append(float(value["4. close"]))
+
+        #Chick if any data points were added
+        if not dates or not closing_prices:
+            print("No data found within the specified date range.")
+            return [], []
 
     # Manually sorting the data by date for redundency
     dates, closing_prices = zip(*sorted(zip(dates, closing_prices)))
@@ -91,10 +133,14 @@ def main():
 
     #Default time series to invalid value
     time_series_funciton = None
+    #Default value for interval
+    interval = None
 
     choice = input("Enter the number corresponding to your choice: ")
     if choice == "1":
         time_series_funciton = "TIME_SERIES_INTRADAY"
+        #If user chooses intraday, they must choose an interval
+        interval = input("Enter interval (1min, 5min, 15min, 30min, 60min): ")
     elif choice == "2":
         time_series_funciton = "TIME_SERIES_DAILY"
     elif choice == "3":
@@ -113,10 +159,10 @@ def main():
         return
     
     #Fetch the stock data
-    stock_data = fetch_stock_data(symbol, time_series_funciton)
+    stock_data = fetch_stock_data(symbol, time_series_funciton, interval=interval)
 
     if stock_data:
-        dates, closing_prices = parse_time_series(stock_data, time_series_funciton, start_date, end_date)
+        dates, closing_prices = parse_time_series(stock_data, time_series_funciton, start_date, end_date, interval)
         generate_chart(dates, closing_prices, symbol)
 
 if __name__ == "__main__":
