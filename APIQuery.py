@@ -1,7 +1,9 @@
 import requests
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
+import webbrowser
+import os
 
 #API Key for Alpha Vantage Query
 api_key = "A5XGJKIF1F4259FR"
@@ -120,20 +122,57 @@ def generate_chart(dates, closing_prices, symbol, chart_type, time_series_functi
     plt.legend()
     plt.grid(True)
 
+    # Dynamically adjust x-axis ticks based on the time range
     if time_series_function == "TIME_SERIES_INTRADAY":
         plt.gca().xaxis.set_major_locator(mdates.HourLocator(interval=2))  # Show tick every 2 hours
         plt.gca().xaxis.set_minor_locator(mdates.MinuteLocator(interval=30))
         plt.gca().xaxis.set_major_formatter(mdates.DateFormatter("%m-%d %H:%M"))
     else:
-        plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=1))  # Show tick for each day
-        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+        # Determine the length of the date range to adjust the ticks
+        num_dates = len(dates)
+
+        if num_dates <= 10:
+            # If less than or equal to 10 dates, show all
+            plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=1))
+            plt.gca().xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+        elif num_dates <= 60:
+            # If dates span about 2 months, show weekly ticks
+            plt.gca().xaxis.set_major_locator(mdates.WeekdayLocator(interval=1))
+            plt.gca().xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+        elif num_dates <= 365:
+            # If dates span up to a year, show monthly ticks
+            plt.gca().xaxis.set_major_locator(mdates.MonthLocator(interval=1))
+            plt.gca().xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
+        else:
+            # If more than a year, show quarterly ticks
+            plt.gca().xaxis.set_major_locator(mdates.MonthLocator(interval=3))
+            plt.gca().xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
 
     plt.xticks(rotation=45)  # Rotate labels for better readability
     plt.tight_layout()  # Adjust layout to fit everything
-    plt.gcf().autofmt_xdate()  # Automatically adjust the date labels for readability
 
-    plt.savefig("stock_chart.png")
-    plt.show()
+    # Save the chart as a PNG
+    chart_filename = "stock_chart.png"
+    plt.savefig(chart_filename)
+
+    # Create an HTML file to open the image in a browser
+    html_content = f"""
+    <html>
+    <head><title>Stock Chart for {symbol}</title></head>
+    <body>
+        <h1>Stock Chart for {symbol}</h1>
+        <img src="{chart_filename}" alt="Stock Chart">
+    </body>
+    </html>
+    """
+    
+    html_filename = "stock_chart.html"
+    with open(html_filename, "w") as file:
+        file.write(html_content)
+    
+    # Use webbrowser to open the HTML file in the default browser
+    file_path = os.path.abspath(html_filename)
+    webbrowser.open(f"file://{file_path}")
 
 def main():
 #Taking user input for stock symbol   
